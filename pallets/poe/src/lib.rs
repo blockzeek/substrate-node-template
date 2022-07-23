@@ -25,6 +25,8 @@ pub mod pallet {
 		ClaimCreated(T::AccountId, Vec<u8>),
 		/// Event emitted when a claim is revoked by the owner. [who, claim]
 		ClaimRevoked(T::AccountId, Vec<u8>),
+		/// Event emitted when a claim is transferred by the original owner to the new owner. [who, claim, dest]
+		ClaimTransferred(T::AccountId, Vec<u8>, T::AccountId),
 	}
 
 	#[pallet::error]
@@ -93,6 +95,39 @@ pub mod pallet {
 
 			// Emit an event that the claim was erased.
 			Self::deposit_event(Event::ClaimRevoked(sender, proof));
+			Ok(())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn transfer_claim(
+			origin: OriginFor<T>,
+			proof: Vec<u8>,
+			dest: T::AccountId,
+		) -> DispatchResult {
+			// Check that the extrinsic was signed and get the signer.
+			// This function will return an error if the extrinsic is not signed.
+			let sender = ensure_signed(origin)?;
+
+			// Verify that the specified proof has been claimed.
+			ensure!(Proofs::<T>::contains_key(&proof), Error::<T>::NoSuchProof);
+
+			// Get owner of the claim.
+			let (owner, _) = Proofs::<T>::get(&proof);
+
+			// Verify that sender of the current call is the claim owner.
+			ensure!(sender == owner, Error::<T>::NotProofOwner);
+
+			// Remove claim from storage.
+			Proofs::<T>::remove(&proof);
+
+			// Get the block number from the FRAME System pallet.
+			let current_block = <frame_system::Pallet<T>>::block_number();
+
+			// Store the proof with the dest and block number.
+			Proofs::<T>::insert(&proof, (&dest, current_block));
+
+			// Emit an event that the claim was transferred.
+			Self::deposit_event(Event::ClaimTransferred(sender, proof, dest));
 			Ok(())
 		}
 	}
