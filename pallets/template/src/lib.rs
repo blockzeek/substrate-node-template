@@ -16,7 +16,7 @@ mod benchmarking;
 
 use sp_runtime::{
     offchain::{
-        storage::{StorageValueRef},
+		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
     },
     traits::Zero,
 };
@@ -131,8 +131,23 @@ pub mod pallet {
                 let value = (random_slice, timestamp_u64);
                 log::info!("in odd block, value to write: {:?}", value);
 
+                struct StateError;
+
                 //  write or mutate tuple content to key
-                val_ref.set(&value);
+                let res = val_ref.mutate(|val: Result<Option<([u8;32], u64)>, StorageRetrievalError>| -> Result<_, StateError> {
+                    match val {
+                        Ok(Some(_)) => Ok(value),
+                        _ => Ok(value),
+                    }
+                });
+
+                match res {
+                    Ok(value) => {
+                        log::info!("in odd block, mutate successfully: {:?}", value);
+                    },
+                    Err(MutateStorageError::ValueFunctionFailed(_)) => (),
+                    Err(MutateStorageError::ConcurrentModification(_)) => (),
+                }
 
             } else {
                 // even
