@@ -99,4 +99,27 @@ pub mod pallet {
 			}
 		}
 	}
+
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+
+        fn offchain_worker(block_number: T::BlockNumber) {
+            log::info!("Hello World from offchain workers!: {:?}", block_number);
+        }
+
+        fn on_initialize(_n: T::BlockNumber) -> Weight {
+            log::info!("in on_initialize!");
+            0
+        }
+
+        fn on_finalize(_n: T::BlockNumber) {
+            log::info!("in on_finalize!");
+        }
+
+        fn on_idle(_n: T::BlockNumber, _remaining_weight: Weight) -> Weight {
+            log::info!("in on_idle!");
+            0
+        }
+
+    }
 }
