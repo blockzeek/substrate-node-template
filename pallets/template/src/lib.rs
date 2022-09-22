@@ -99,4 +99,20 @@ pub mod pallet {
 			}
 		}
 	}
+
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+
+        fn offchain_worker(block_number: T::BlockNumber) {
+            log::info!("Hello World from offchain workers!: {:?}", block_number);
+
+            let timeout = sp_io::offchain::timestamp()
+                .add(sp_runtime::offchain::Duration::from_millis(8000));
+
+            sp_io::offchain::sleep_until(timeout);
+
+            log::info!("Leave from offchain workers!: {:?}", block_number);
+
+        }
+    }
 }
