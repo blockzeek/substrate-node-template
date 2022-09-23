@@ -18,7 +18,6 @@ use sp_runtime::{
     offchain::{
         storage::{StorageValueRef},
     },
-    traits::Zero,
 };
 
 #[frame_support::pallet]
@@ -28,6 +27,8 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use frame_support::inherent::Vec;
 
+    use sp_io::offchain_index;
+    // const ONCHAIN_TX_KEY: &[u8] = b"node-template::storage::";
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -107,6 +108,15 @@ pub mod pallet {
 				},
 			}
 		}
+        
+        #[pallet::weight(100)]
+        pub fn extrinsic(origin: OriginFor<T>, number: u32) -> DispatchResult {
+            let _who = ensure_signed(origin)?;
+    
+            let key = Self::derive_key(frame_system::Pallet::<T>::block_number());
+            offchain_index::set(&key, &number.encode());
+            Ok(())
+        }
 	}
 
     #[pallet::hooks]
@@ -115,37 +125,13 @@ pub mod pallet {
         fn offchain_worker(block_number: T::BlockNumber) {
             log::info!("Hello World from offchain workers!: {:?}", block_number);
 
-
-            if block_number % 2u32.into() != Zero::zero() {
-                // odd
-                let key = Self::derive_key(block_number);
-                let val_ref = StorageValueRef::persistent(&key);
-                
-                //  get a local random value 
-                let random_slice = sp_io::offchain::random_seed();
-                
-                //  get a local timestamp
-                let timestamp_u64 = sp_io::offchain::timestamp().unix_millis();
-
-                // combine to a tuple and print it  
-                let value = (random_slice, timestamp_u64);
-                log::info!("in odd block, value to write: {:?}", value);
-
-                //  write or mutate tuple content to key
-                val_ref.set(&value);
-
+            let key = Self::derive_key(block_number);
+            let val_ref = StorageValueRef::persistent(&key);
+        
+            if let Ok(Some(data)) = val_ref.get::<u32>() {
+                log::info!("local storage data written: {:?}", data);
             } else {
-                // even
-                let key = Self::derive_key(block_number - 1u32.into());
-                let mut val_ref = StorageValueRef::persistent(&key);
-
-                // get from db by key
-                if let Ok(Some(value)) = val_ref.get::<([u8;32], u64)>() {
-                    // print values
-                    log::info!("in even block, value read: {:?}", value);
-                    // delete that key
-                    val_ref.clear();
-                }
+                log::info!("no local storage written in current block.");
             }
 
             log::info!("Leave from offchain workers!: {:?}", block_number);
@@ -155,7 +141,6 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
-
         #[deny(clippy::clone_double_ref)]
         fn derive_key(block_number: T::BlockNumber) -> Vec<u8> {
             block_number.using_encoded(|encoded_bn| {
@@ -166,6 +151,5 @@ pub mod pallet {
                     .collect::<Vec<u8>>()
             })
         }
-
     }
 }
