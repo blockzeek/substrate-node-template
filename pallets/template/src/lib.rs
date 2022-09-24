@@ -26,9 +26,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::inherent::Vec;
-
-    use sp_io::offchain_index;
-    // const ONCHAIN_TX_KEY: &[u8] = b"node-template::storage::";
+	use sp_io::offchain_index;
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -108,48 +106,44 @@ pub mod pallet {
 				},
 			}
 		}
-        
-        #[pallet::weight(100)]
-        pub fn extrinsic(origin: OriginFor<T>, number: u32) -> DispatchResult {
-            let _who = ensure_signed(origin)?;
-    
-            let key = Self::derive_key(frame_system::Pallet::<T>::block_number());
-            offchain_index::set(&key, &number.encode());
-            Ok(())
-        }
+
+		#[pallet::weight(100)]
+		pub fn extrinsic(origin: OriginFor<T>, number: u32) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			let key = Self::derive_key(frame_system::Pallet::<T>::block_number());
+			offchain_index::set(&key, &number.encode());
+			Ok(())
+		}
+	}
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+
+		fn offchain_worker(block_number: T::BlockNumber) {
+			log::info!("Hello World from offchain workers!: {:?}", block_number);
+			
+			let key = Self::derive_key(block_number);
+			let val_ref = StorageValueRef::persistent(&key);
+
+			if let Ok(Some(data)) = val_ref.get::<u32>() {
+				log::info!("local storage data written: {:?}", data);
+			} else {
+				log::info!("no local storage written in current block.");
+			}
+			
+			log::info!("Leave from offchain workers!: {:?}", block_number);
+		}
 	}
 
-    #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-
-        fn offchain_worker(block_number: T::BlockNumber) {
-            log::info!("Hello World from offchain workers!: {:?}", block_number);
-
-            let key = Self::derive_key(block_number);
-            let val_ref = StorageValueRef::persistent(&key);
-        
-            if let Ok(Some(data)) = val_ref.get::<u32>() {
-                log::info!("local storage data written: {:?}", data);
-            } else {
-                log::info!("no local storage written in current block.");
-            }
-
-            log::info!("Leave from offchain workers!: {:?}", block_number);
-
-        }
-
-    }
-
-    impl<T: Config> Pallet<T> {
-        #[deny(clippy::clone_double_ref)]
-        fn derive_key(block_number: T::BlockNumber) -> Vec<u8> {
-            block_number.using_encoded(|encoded_bn| {
-                b"node-template::storage::"
-                    .iter()
-                    .chain(encoded_bn)
-                    .copied()
-                    .collect::<Vec<u8>>()
-            })
-        }
-    }
+	impl<T: Config> Pallet<T> {
+		#[deny(clippy::clone_double_ref)]
+		fn derive_key(block_number: T::BlockNumber) -> Vec<u8> {
+			block_number.using_encoded(|encoded_bn| {
+				b"node-template::storage::"
+				.iter()
+				.chain(encoded_bn)
+				.copied()
+				.collect::<Vec<u8>>()
+			})
+		}
+	}
 }

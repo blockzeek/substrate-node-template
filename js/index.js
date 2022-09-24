@@ -9,9 +9,10 @@ async function main () {
   // Create the API and wait until ready
   const api = await ApiPromise.create({ provider });
 
-  await api.rpc.offchain.localStorageGet('PERSISTENT', '0x6e6f64652d74656d706c6174653a3a73746f726167653a3a06000000', (option) => {
+  // the hex: `node-template::storage::[block#]`
+  await api.rpc.offchain.localStorageGet('PERSISTENT', '0x6e6f64652d74656d706c6174653a3a73746f726167653a3a08000000', (option) => {
     if (option.isSome) {
-        console.log(u8aToNumber(option.unwrap()) == 123123);
+        console.log(u8aToNumber(option.unwrap()) == 1234);
     } else {
         console.log('no record found')
     }
