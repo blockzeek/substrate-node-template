@@ -32,6 +32,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 		type KittyIndex: Parameter + Default + Copy + MaxEncodedLen + AtLeast32BitUnsigned + Bounded;
+
+		#[pallet::constant]
+		type MaxKittiesOwned: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -51,6 +54,16 @@ pub mod pallet {
 	#[pallet::getter(fn kitty_owner)]
 	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, T::KittyIndex, T::AccountId>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn owner_kitties)]
+	pub type OwnerKitties<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		BoundedVec<T::KittyIndex, T::MaxKittiesOwned>,
+		ValueQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -64,6 +77,7 @@ pub mod pallet {
 		InvalidKittyId,
 		NotOwner,
 		SameKittyId,
+		ExceedMaxKittyOwned,
 	}
 
 	#[pallet::call]
@@ -78,6 +92,9 @@ pub mod pallet {
 
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
+			OwnerKitties::<T>::try_mutate(&who, |kitties| kitties.try_push(kitty_id))
+				.map_err(|_| Error::<T>::ExceedMaxKittyOwned)?;
+
 			NextKittyId::<T>::set(kitty_id + One::one());
 
 			// Emit an event.
@@ -113,6 +130,9 @@ pub mod pallet {
 
 			<Kitties<T>>::insert(kitty_id, &new_kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
+			OwnerKitties::<T>::try_mutate(&who, |kitties| kitties.try_push(kitty_id))
+				.map_err(|_| Error::<T>::ExceedMaxKittyOwned)?;
+
 			NextKittyId::<T>::set(kitty_id + One::one());
 
 			Self::deposit_event(Event::KittyBred(who, kitty_id, new_kitty));
@@ -132,7 +152,21 @@ pub mod pallet {
 
 			ensure!(Self::kitty_owner(kitty_id) == Some(who.clone()), Error::<T>::NotOwner);
 
+			OwnerKitties::<T>::try_mutate(&who, |owned| {
+				if let Some(index) =
+					owned.iter().position(|&target_kitty_id| target_kitty_id == kitty_id)
+				{
+					owned.swap_remove(index);
+					return Ok(());
+				}
+				Err(())
+			})
+			.map_err(|_| <Error<T>>::NotOwner)?;
+
 			<KittyOwner<T>>::insert(kitty_id, &new_owner);
+
+			OwnerKitties::<T>::try_mutate(&new_owner, |kitties| kitties.try_push(kitty_id))
+				.map_err(|_| Error::<T>::ExceedMaxKittyOwned)?;
 
 			Self::deposit_event(Event::KittyTransferred(who, new_owner, kitty_id));
 
