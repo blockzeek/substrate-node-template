@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -8,11 +9,17 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+
 #[frame_support::pallet]
 pub mod pallet {
     pub use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
-    use sp_std::prelude::*;
+    pub use frame_system::pallet_prelude::*;
+    pub use sp_std::prelude::*;
+    use super::WeightInfo;
 
     #[pallet::config]
     pub trait Config: frame_system::Config {
@@ -20,6 +27,7 @@ pub mod pallet {
         #[pallet::constant]
         type MaxClaimLength: Get<u32>;
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+        type WeightInfo: WeightInfo;
     }
 
     #[pallet::pallet]
@@ -54,7 +62,7 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        #[pallet::weight(0)]
+        #[pallet::weight(T::WeightInfo::create_claim(claim.len() as u32))]
         pub fn create_claim(origin: OriginFor<T>, claim: Vec<u8>) -> DispatchResultWithPostInfo {
             let sender = ensure_signed(origin)?;
             
@@ -71,7 +79,7 @@ pub mod pallet {
             Ok(().into())
         }
 
-        #[pallet::weight(0)]
+        #[pallet::weight(T::WeightInfo::revoke_claim(claim.len() as u32))]
         pub fn revoke_claim(origin: OriginFor<T>, claim: Vec<u8>) -> DispatchResultWithPostInfo {
             let sender = ensure_signed(origin)?;
 
@@ -88,7 +96,7 @@ pub mod pallet {
             Ok(().into())
         }
 
-        #[pallet::weight(0)]
+        #[pallet::weight(T::WeightInfo::transfer_claim(claim.len() as u32))]
         pub fn transfer_claim(origin: OriginFor<T>, claim: Vec<u8>, dest: T::AccountId) -> DispatchResultWithPostInfo {
             let sender = ensure_signed(origin)?;
 
