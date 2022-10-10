@@ -268,10 +268,16 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const KittyReserve: u64 = 1_000_000_000_000_000;
+}
+
 impl pallet_kitties::Config for Runtime {
 	type Event = Event;
 	type Randomness = RandomnessCollectiveFlip;
 	type KittyIndex = u32;
+	type KittyReserve = KittyReserve;
+	type Currency = Balances;
 	type MaxKittiesOwned = ConstU32<512>;
 }
 

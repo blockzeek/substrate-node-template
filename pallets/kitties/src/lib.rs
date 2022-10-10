@@ -11,7 +11,8 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
-	use frame_support::traits::Randomness;
+	use frame_support::traits::{tokens::BalanceStatus, Currency, Randomness, ReservableCurrency};
+	use frame_support::transactional;
 	use frame_system::pallet_prelude::*;
 	use sp_io::hashing::blake2_128;
 	use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, One};
@@ -27,11 +28,16 @@ pub mod pallet {
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, TypeInfo, MaxEncodedLen)]
 	pub struct Kitty(pub [u8; 16]);
 
+	type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 		type KittyIndex: Parameter + Default + Copy + MaxEncodedLen + AtLeast32BitUnsigned + Bounded;
+		type KittyReserve: Get<BalanceOf<Self>>;
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		#[pallet::constant]
 		type MaxKittiesOwned: Get<u32>;
@@ -78,6 +84,8 @@ pub mod pallet {
 		NotOwner,
 		SameKittyId,
 		ExceedMaxKittyOwned,
+		TokenNotEnough,
+		ReceiverNotExist,
 	}
 
 	#[pallet::call]
@@ -86,6 +94,9 @@ pub mod pallet {
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let kitty_id = Self::get_next_id().map_err(|_| Error::<T>::InvalidKittyId)?;
+
+			T::Currency::reserve(&who, T::KittyReserve::get())
+				.map_err(|_| Error::<T>::TokenNotEnough)?;
 
 			let dna = Self::random_value(&who);
 			let kitty = Kitty(dna);
@@ -102,6 +113,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[transactional]
 		#[pallet::weight(10_000)]
 		pub fn breed(
 			origin: OriginFor<T>,
@@ -109,6 +121,9 @@ pub mod pallet {
 			kitty_id_2: T::KittyIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
+			T::Currency::reserve(&who, T::KittyReserve::get())
+				.map_err(|_| Error::<T>::TokenNotEnough)?;
 
 			// check kitty id
 			ensure!(kitty_id_1 != kitty_id_2, Error::<T>::SameKittyId);
@@ -140,6 +155,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[transactional]
 		#[pallet::weight(10_000)]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -162,6 +178,14 @@ pub mod pallet {
 				Err(())
 			})
 			.map_err(|_| <Error<T>>::NotOwner)?;
+
+			T::Currency::repatriate_reserved(
+				&who,
+				&new_owner,
+				T::KittyReserve::get(),
+				BalanceStatus::Reserved,
+			)
+			.map_err(|_| Error::<T>::ReceiverNotExist)?;
 
 			<KittyOwner<T>>::insert(kitty_id, &new_owner);
 
