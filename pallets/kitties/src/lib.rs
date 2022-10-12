@@ -2,11 +2,11 @@
 
 pub use pallet::*;
 
-// #[cfg(test)]
-// mod mock;
+#[cfg(test)]
+mod mock;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -90,6 +90,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[transactional]
 		#[pallet::weight(10_000)]
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
